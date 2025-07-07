@@ -1,0 +1,7 @@
+.DS_Store
+.idea/
+.cursor/
+.vscode/
+build/
+cmake-build-debug/
+.cursorrules
