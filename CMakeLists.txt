@@ -18,5 +18,10 @@ add_executable(sql_db_engine
     src/sql/parsers/UpdateParser.cpp
     src/sql/parsers/UseParser.cpp
     src/net/Server.cpp
+    src/db/Database.cpp
+    src/db/Row.cpp
+    src/db/StorageEngine.cpp
     src/db/StorageEngineIO.cpp
+    src/db/Table.cpp
+    src/db/ValueUtils.cpp
     src/sql/Executor.cpp)
