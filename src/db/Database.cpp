@@ -2,31 +2,35 @@
 
 namespace db {
 
-void Database::create_table(const std::string& table_name, const std::vector<std::string>& columns, const std::vector<std::string>& types) {
-    tables.emplace(table_name, Table(table_name, columns, types));
+Database::Database(std::string name) : name_(std::move(name)) {}
+
+void Database::create_table(std::string_view table_name, const std::vector<std::string>& columns, const std::vector<std::string>& types) {
+    tables_.emplace(std::string(table_name), Table(std::string(table_name), columns, types));
 }
 
-void Database::drop_table(const std::string& table_name) {
-    tables.erase(table_name);
+void Database::drop_table(std::string_view table_name) {
+    tables_.erase(std::string(table_name));
+}
+
+const Table* Database::get_table(std::string_view table_name) const noexcept {
+    auto it = tables_.find(std::string(table_name));
+    return it != tables_.end() ? &it->second : nullptr;
+}
+
+Table* Database::get_table(std::string_view table_name) noexcept {
+    auto it = tables_.find(std::string(table_name));
+    return it != tables_.end() ? &it->second : nullptr;
 }
 
 void to_json(json& j, const Database& d) {
     j = json::object();
-    j["name"] = d.name;
-    j["tables"] = json::object();
-    for (const auto& [name, table] : d.tables) {
-        j["tables"][name] = table;
-    }
+    j["name"] = d.name_;
+    j["tables"] = d.tables_;
 }
 
 void from_json(const json& j, Database& d) {
-    j.at("name").get_to(d.name);
-    d.tables.clear();
-    for (auto it = j.at("tables").begin(); it != j.at("tables").end(); ++it) {
-        Table table;
-        it.value().get_to(table);
-        d.tables[it.key()] = table;
-    }
+    j.at("name").get_to(d.name_);
+    j.at("tables").get_to(d.tables_);
 }
 
 } // namespace db

@@ -1,5 +1,6 @@
 #include "sql/parsers/SelectParser.hpp"
 #include "sql/parsers/Utils.hpp"
+#include <string>
 #include <sstream>
 
 namespace sql {

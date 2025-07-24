@@ -11,9 +11,11 @@
 
 using asio::ip::tcp;
 
+namespace {
+
+constexpr std::string_view dbfile = "dbdata.json";
+std::atomic<bool> running{true};
 db::StorageEngine engine;
-const std::string dbfile = "dbdata.json";
-std::atomic<bool> running(true);
 
 void console_handler() {
     std::string input;
@@ -30,14 +32,14 @@ void console_handler() {
 void session(tcp::socket sock) {
     try {
         for (;;) {
-            char data[1024];
+            std::string data(1024, '\0');
             asio::error_code error;
             size_t length = sock.read_some(asio::buffer(data), error);
             if (error == asio::error::eof) break;
-            else if (error) throw asio::system_error(error);
+            if (error) throw asio::system_error(error);
 
-            std::string query(data, length);
-            auto res = sql::Parser::parse(query);
+            data.resize(length);
+            auto res = sql::Parser::parse(data);
             std::string response;
             if (!res.valid) {
                 response = "Parse error: " + res.error + "\n";
@@ -47,11 +49,14 @@ void session(tcp::socket sock) {
                 else response = "Error: " + exec.error + "\n";
             }
             asio::write(sock, asio::buffer(response), error);
+            if (error) break;
         }
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
         std::cerr << "Session error: " << e.what() << std::endl;
     }
 }
+
+} // namespace
 
 void run_server(short port) {
     // Загрузка БД
@@ -60,27 +65,27 @@ void run_server(short port) {
     } else {
         std::cout << "DB loaded\n";
     }
-    
+
     asio::io_context io_context;
     tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port));
     std::cout << "Server started on port " << port << std::endl;
     std::cout << "Type 'stop' to shutdown server\n";
-    
+
     std::thread console_thread(console_handler);
-    
-    // Функция для обработки новых подключений
+
+    // Асинхронный accept с лямбдой
     std::function<void()> do_accept;
     std::atomic<bool> accept_in_progress{false};
-    
+
     do_accept = [&]() {
         if (!running) return;
-        
+
         accept_in_progress = true;
         auto socket = std::make_shared<tcp::socket>(io_context);
-        
+
         acceptor.async_accept(*socket, [&, socket](const asio::error_code& error) {
             accept_in_progress = false;
-            
+
             if (!error) {
                 std::thread(session, std::move(*socket)).detach();
                 do_accept();
@@ -89,24 +94,24 @@ void run_server(short port) {
             }
         });
     };
-    
-    // Запускаем первый accept
+
     do_accept();
-    
+
     // Основной цикл обработки событий
     while (running) {
-        io_context.poll(); // Неблокирующая обработка событий
+        io_context.poll();
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    
-    // Принудительная остановка
+
+    // Завершение работы
     acceptor.cancel();
     acceptor.close();
     io_context.stop();
-    io_context.poll(); // обработать все оставшиеся события
+    io_context.poll();
 
-    // console_thread.join() теперь не зависнет, если поток консоли завершился
-    console_thread.join();
+    if (console_thread.joinable())
+        console_thread.join();
+
     std::cout << "Saving database...\n";
     db::save_to_file(engine, dbfile);
     std::cout << "Server stopped\n";

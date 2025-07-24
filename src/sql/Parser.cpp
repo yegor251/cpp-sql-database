@@ -20,33 +20,27 @@ static std::string to_upper(const std::string& s) {
     return r;
 }
 
-// Добавляем функцию для конвертации строки в Value
 static db::Value parse_value(const std::string& val) {
-    // Убираем кавычки если есть
     std::string clean_val = val;
     if (clean_val.size() >= 2 && clean_val.front() == '"' && clean_val.back() == '"') {
         clean_val = clean_val.substr(1, clean_val.size() - 2);
     }
     
-    // Попытка парсинга как int
     try {
         int int_val = std::stoi(clean_val);
         return db::Value(int_val);
     } catch (...) {}
     
-    // Попытка парсинга как float
     try {
         float float_val = std::stof(clean_val);
         return db::Value(float_val);
     } catch (...) {}
     
-    // Проверка на bool
     std::string upper_val = to_upper(clean_val);
     if (upper_val == "TRUE" || upper_val == "FALSE") {
         return db::Value(upper_val == "TRUE");
     }
     
-    // По умолчанию строка
     return db::Value(clean_val);
 }
 

@@ -1,4 +1,6 @@
 #include "sql/parsers/DropParser.hpp"
+#include <string>
+#include <sstream>
 
 namespace sql {
 namespace parsers {

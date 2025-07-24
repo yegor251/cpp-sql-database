@@ -1,5 +1,6 @@
 #include "sql/parsers/CreateParser.hpp"
 #include "sql/parsers/Utils.hpp"
+#include <string>
 #include <sstream>
 #include <algorithm>
 

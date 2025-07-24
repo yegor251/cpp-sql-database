@@ -1,5 +1,6 @@
 #include "sql/parsers/UpdateParser.hpp"
 #include "sql/parsers/Utils.hpp"
+#include <string>
 #include <sstream>
 #include <vector>
 

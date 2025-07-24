@@ -1,5 +1,7 @@
 #include "sql/parsers/InsertParser.hpp"
 #include "sql/parsers/Utils.hpp"
+#include <string>
+#include <sstream>
 
 namespace sql {
 namespace parsers {
