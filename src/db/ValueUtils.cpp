@@ -3,17 +3,21 @@
 namespace db {
 
 std::string value_to_string(const Value& v) {
-    return std::visit([](const auto& val) -> std::string {
-        if constexpr (std::is_same_v<decltype(val), bool>) {
-            return val ? "true" : "false";
-        } else if constexpr (std::is_same_v<decltype(val), std::string>) {
-            return val;
-        } else if constexpr (std::is_same_v<decltype(val), int> || std::is_same_v<decltype(val), float>) {
-            return std::to_string(val);
-        } else {
-            return "unknown";
-        }
-    }, v);
+    if (std::holds_alternative<int>(v)) {
+        int val = std::get<int>(v);
+        return std::to_string(val);
+    } else if (std::holds_alternative<float>(v)) {
+        float val = std::get<float>(v);
+        return std::to_string(val);
+    } else if (std::holds_alternative<bool>(v)) {
+        bool val = std::get<bool>(v);
+        return val ? "true" : "false";
+    } else if (std::holds_alternative<std::string>(v)) {
+        std::string val = std::get<std::string>(v);
+        return val;
+    } else {
+        return "unknown";
+    }
 }
 
 bool value_equals(const Value& a, const Value& b) noexcept {

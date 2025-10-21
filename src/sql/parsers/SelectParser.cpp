@@ -23,6 +23,9 @@ ParseResult parse_select(std::istringstream& iss) {
     }
     std::string tablename;
     iss >> tablename;
+    if (!tablename.empty() && tablename.back() == ';') {
+        tablename.pop_back();
+    }
     if (tablename.empty()) return {CommandType::SELECT, {}, false, "No table name"};
     
     std::vector<std::string> columns;
@@ -56,5 +59,5 @@ ParseResult parse_select(std::istringstream& iss) {
     return {CommandType::SELECT, Select{columns, tablename, where}, true, ""};
 }
 
-} // namespace parsers
-} // namespace sql 
+}
+}

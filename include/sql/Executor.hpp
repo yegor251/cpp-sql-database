@@ -7,6 +7,7 @@ namespace sql {
 struct ExecResult {
     bool ok;
     std::string error;
+    std::string result;
 };
 
 class Executor {

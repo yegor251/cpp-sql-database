@@ -45,8 +45,15 @@ void session(tcp::socket sock) {
                 response = "Parse error: " + res.error + "\n";
             } else {
                 auto exec = sql::Executor::execute(res, engine);
-                if (exec.ok) response = "OK\n";
-                else response = "Error: " + exec.error + "\n";
+                if (exec.ok) {
+                    if (res.type == sql::CommandType::SELECT) {
+                        response = exec.result;
+                    } else {
+                        response = "OK\n";
+                    }
+                } else {
+                    response = "Error: " + exec.error + "\n";
+                }
             }
             asio::write(sock, asio::buffer(response), error);
             if (error) break;
