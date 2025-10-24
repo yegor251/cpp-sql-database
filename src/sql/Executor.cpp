@@ -1,5 +1,6 @@
 #include "sql/Executor.hpp"
 #include "db/ValueUtils.hpp"
+#include "sql/parsers/Utils.hpp"
 #include <variant>
 #include <algorithm>
 #include <iostream>
@@ -159,7 +160,101 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
         }
         case CommandType::UPDATE: {
             if (current_db.empty()) return {false, "No database selected", ""};
-            return {false, "UPDATE not implemented", ""};
+            const auto& cmd = std::get<Update>(pr.command);
+            auto* db = engine.get_database(current_db);
+            if (!db) return {false, "Database not found", ""};
+            auto* table = db->get_table(cmd.table_name);
+            if (!table) return {false, "Table not found", ""};
+
+            const auto& columns = table->get_columns();
+            auto& rows = table->get_rows();
+
+            std::vector<std::pair<std::string, db::Value>> updates;
+            for (const auto& set_clause : cmd.set) {
+                size_t equals_pos = set_clause.find('=');
+                if (equals_pos == std::string::npos) {
+                    return {false, "Invalid SET clause: " + set_clause, ""};
+                }
+                
+                std::string column_name = set_clause.substr(0, equals_pos);
+                std::string value_str = set_clause.substr(equals_pos + 1);
+                
+                int column_index = -1;
+                for (size_t i = 0; i < columns.size(); ++i) {
+                    if (columns[i].get_name() == column_name) {
+                        column_index = i;
+                        break;
+                    }
+                }
+                
+                if (column_index == -1) {
+                    return {false, "Column '" + column_name + "' not found in table", ""};
+                }
+                
+                db::Value value = sql::parsers::parse_value(value_str);
+                
+                const std::string& expected_type = columns[column_index].get_type();
+                if (!validate_type(value, expected_type)) {
+                    return {false, "Type mismatch for column '" + column_name + 
+                                   "': expected " + expected_type + ", got value '" + db::value_to_string(value) + "'", ""};
+                }
+                
+                updates.push_back({column_name, value});
+            }
+            
+            int updated_count = 0;
+            for (auto& row : rows) {
+                bool should_update = true;
+                
+                if (!cmd.where.empty()) {
+                    should_update = false;
+                    for (const auto& where_clause : cmd.where) {
+                        size_t equals_pos = where_clause.find('=');
+                        if (equals_pos != std::string::npos) {
+                            std::string where_column = where_clause.substr(0, equals_pos);
+                            std::string where_value_str = where_clause.substr(equals_pos + 1);
+                            
+                            int where_column_index = -1;
+                            for (size_t i = 0; i < columns.size(); ++i) {
+                                if (columns[i].get_name() == where_column) {
+                                    where_column_index = i;
+                                    break;
+                                }
+                            }
+                            
+                            if (where_column_index != -1) {
+                                db::Value where_value = sql::parsers::parse_value(where_value_str);
+                                const auto& row_values = row.get_values();
+                                if (where_column_index < row_values.size() && 
+                                    db::value_equals(row_values[where_column_index], where_value)) {
+                                    should_update = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (should_update) {
+                    auto& row_values = row.get_values();
+                    for (const auto& update : updates) {
+                        int update_column_index = -1;
+                        for (size_t i = 0; i < columns.size(); ++i) {
+                            if (columns[i].get_name() == update.first) {
+                                update_column_index = i;
+                                break;
+                            }
+                        }
+                        
+                        if (update_column_index != -1 && update_column_index < row_values.size()) {
+                            row_values[update_column_index] = update.second;
+                        }
+                    }
+                    updated_count++;
+                }
+            }
+            
+            return {true, "", "Updated " + std::to_string(updated_count) + " row(s)"};
         }
         case CommandType::DELETE: {
             if (current_db.empty()) return {false, "No database selected", ""};
@@ -168,7 +263,57 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
             if (!db) return {false, "Database not found", ""};
             auto* table = db->get_table(cmd.table_name);
             if (!table) return {false, "Table not found", ""};
-            return {false, "DELETE not implemented", ""};
+            
+            auto& rows = table->get_rows();
+            const auto& columns = table->get_columns();
+            
+            if (cmd.where.empty()) {
+                rows.clear();
+                return {true, "", "Deleted all rows from table " + cmd.table_name};
+            }
+            
+            int deleted_count = 0;
+            auto it = rows.begin();
+            
+            while (it != rows.end()) {
+                bool should_delete = false;
+                
+                for (size_t i = 0; i < cmd.where.size(); ++i) {
+                    if (i + 2 < cmd.where.size() && cmd.where[i+1] == "=") {
+                        std::string where_column = cmd.where[i];
+                        std::string where_value_str = cmd.where[i+2];
+                        
+                        int where_column_index = -1;
+                        for (size_t j = 0; j < columns.size(); ++j) {
+                            if (columns[j].get_name() == where_column) {
+                                where_column_index = j;
+                                break;
+                            }
+                        }
+                        
+                        if (where_column_index != -1) {
+                            db::Value where_value = sql::parsers::parse_value(where_value_str);
+                            const auto& row_values = it->get_values();
+                            
+                            if (where_column_index < row_values.size() && 
+                                db::value_equals(row_values[where_column_index], where_value)) {
+                                should_delete = true;
+                                break;
+                            }
+                        }
+                        i += 2;
+                    }
+                }
+                
+                if (should_delete) {
+                    it = rows.erase(it);
+                    deleted_count++;
+                } else {
+                    ++it;
+                }
+            }
+            
+            return {true, "", "Deleted " + std::to_string(deleted_count) + " row(s) from table " + cmd.table_name};
         }
         default:
             return {false, "Unsupported command", ""};

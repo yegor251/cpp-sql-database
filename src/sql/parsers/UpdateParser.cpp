@@ -23,30 +23,73 @@ ParseResult parse_update(std::istringstream& iss) {
     }
     
     std::vector<std::string> set_clauses;
-    std::string column_name, equals_sign, value;
+    std::vector<std::string> where_clauses;
     
-    while (iss >> column_name >> equals_sign >> value) {
-        if (equals_sign != "=") {
+    std::string line;
+    std::getline(iss, line);
+    
+    line.erase(0, line.find_first_not_of(" \t"));
+    
+    if (!line.empty() && line.back() == ';') {
+        line.pop_back();
+    }
+    
+    size_t where_pos = line.find(" WHERE ");
+    if (where_pos == std::string::npos) {
+        where_pos = line.find(" where ");
+    }
+    
+    std::string set_part;
+    if (where_pos != std::string::npos) {
+        set_part = line.substr(0, where_pos);
+        std::string where_part = line.substr(where_pos + 7); // Skip " WHERE "
+        
+        where_part.erase(0, where_part.find_first_not_of(" \t"));
+        where_part.erase(where_part.find_last_not_of(" \t") + 1);
+        
+        std::istringstream where_stream(where_part);
+        std::string condition;
+        while (where_stream >> condition) {
+            where_clauses.push_back(condition);
+        }
+    } else {
+        set_part = line;
+    }
+    
+    std::istringstream set_stream(set_part);
+    std::string assignment;
+    
+    while (std::getline(set_stream, assignment, ',')) {
+        assignment.erase(0, assignment.find_first_not_of(" \t"));
+        assignment.erase(assignment.find_last_not_of(" \t") + 1);
+        
+        if (assignment.empty()) continue;
+        
+        size_t equals_pos = assignment.find('=');
+        if (equals_pos == std::string::npos) {
             return {CommandType::UNKNOWN, {}, false, "Expected = in UPDATE SET clause"};
         }
         
-        set_clauses.push_back(column_name + "=" + value);
+        std::string column_name = assignment.substr(0, equals_pos);
+        std::string value = assignment.substr(equals_pos + 1);
         
-        // Check for comma or end
-        char next_char = iss.peek();
-        if (next_char == ',') {
-            iss.get(); // consume comma
-            iss >> std::ws; // skip whitespace
-        } else if (next_char == ';' || next_char == '\n' || next_char == EOF) {
-            break;
+        column_name.erase(0, column_name.find_first_not_of(" \t"));
+        column_name.erase(column_name.find_last_not_of(" \t") + 1);
+        value.erase(0, value.find_first_not_of(" \t"));
+        value.erase(value.find_last_not_of(" \t") + 1);
+        
+        if (column_name.empty() || value.empty()) {
+            return {CommandType::UNKNOWN, {}, false, "Empty column name or value in UPDATE SET clause"};
         }
+        
+        set_clauses.push_back(column_name + "=" + value);
     }
     
     if (set_clauses.empty()) {
         return {CommandType::UNKNOWN, {}, false, "No columns specified for update"};
     }
     
-    return {CommandType::UPDATE, Update{table_name, set_clauses}, true, ""};
+    return {CommandType::UPDATE, Update{table_name, set_clauses, where_clauses}, true, ""};
 }
 
-} // namespace sql::parsers 
+}

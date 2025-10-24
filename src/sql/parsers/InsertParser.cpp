@@ -15,6 +15,9 @@ ParseResult parse_insert(std::istringstream& iss) {
     std::string tablename;
     iss >> tablename;
     if (tablename.empty()) return {CommandType::INSERT, {}, false, "No table name"};
+    if (!tablename.empty() && tablename.back() == ';') {
+        tablename.pop_back();
+    }
     
     char c;
     iss >> c;

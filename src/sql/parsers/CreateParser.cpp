@@ -19,6 +19,10 @@ ParseResult parse_create_table(std::istringstream& iss) {
     iss >> tablename;
     if (tablename.empty()) return {CommandType::CREATE_TABLE, {}, false, "No table name"};
     
+    if (!tablename.empty() && tablename.back() == ';') {
+        tablename.pop_back();
+    }
+    
     char c;
     iss >> c;
     if (c != '(') return {CommandType::CREATE_TABLE, {}, false, "Expected '(' after table name"};
@@ -52,5 +56,5 @@ ParseResult parse_create_table(std::istringstream& iss) {
     return {CommandType::CREATE_TABLE, CreateTable{tablename, columns, types}, true, ""};
 }
 
-} // namespace parsers
-} // namespace sql 
+}
+}
