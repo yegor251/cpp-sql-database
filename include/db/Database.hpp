@@ -13,7 +13,7 @@ class Database {
 public:
     explicit Database(std::string name = {});
 
-    void create_table(std::string_view table_name, const std::vector<std::string>& columns, const std::vector<std::string>& types);
+    void create_table(std::string_view table_name, const std::vector<std::string>& columns, const std::vector<std::string>& types, const std::vector<ForeignKey>& foreign_keys = {});
     void drop_table(std::string_view table_name);
 
     [[nodiscard]] const Table* get_table(std::string_view table_name) const noexcept;

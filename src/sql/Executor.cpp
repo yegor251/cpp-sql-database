@@ -49,7 +49,42 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
             const auto& cmd = std::get<CreateTable>(pr.command);
             auto* db = engine.get_database(current_db);
             if (!db) return {false, "Database not found", ""};
-            db->create_table(cmd.table_name, cmd.columns, cmd.types);
+            
+            for (const auto& fk : cmd.foreign_keys) {
+                const auto* ref_table = db->get_table(fk.referenced_table);
+                if (!ref_table) {
+                    return {false, "Referenced table '" + fk.referenced_table + "' does not exist", ""};
+                }
+                
+                bool ref_column_exists = false;
+                for (const auto& col : ref_table->get_columns()) {
+                    if (col.get_name() == fk.referenced_column) {
+                        ref_column_exists = true;
+                        break;
+                    }
+                }
+                if (!ref_column_exists) {
+                    return {false, "Referenced column '" + fk.referenced_column + "' does not exist in table '" + fk.referenced_table + "'", ""};
+                }
+                
+                bool fk_column_exists = false;
+                for (const auto& col_name : cmd.columns) {
+                    if (col_name == fk.column_name) {
+                        fk_column_exists = true;
+                        break;
+                    }
+                }
+                if (!fk_column_exists) {
+                    return {false, "Foreign key column '" + fk.column_name + "' does not exist in table", ""};
+                }
+            }
+            
+            std::vector<db::ForeignKey> db_foreign_keys;
+            for (const auto& fk : cmd.foreign_keys) {
+                db_foreign_keys.emplace_back(fk.column_name, fk.referenced_table, fk.referenced_column);
+            }
+            
+            db->create_table(cmd.table_name, cmd.columns, cmd.types, db_foreign_keys);
             return {true, "", ""};
         }
         case CommandType::DROP_TABLE: {
@@ -93,6 +128,38 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                 if (!validate_type(value, expected_type)) {
                     return {false, "Type mismatch for column '" + target_columns[i]->get_name() +
                                    "': expected " + expected_type + ", got value '" + db::value_to_string(value) + "'", ""};
+                }
+            }
+
+            for (size_t i = 0; i < target_columns.size(); ++i) {
+                const auto& column = *target_columns[i];
+                const auto& value = cmd.values[i];
+                
+                for (const auto& fk : column.get_foreign_keys()) {
+                    const auto* ref_table = db->get_table(fk.referenced_table);
+                    if (!ref_table) {
+                        return {false, "Referenced table '" + fk.referenced_table + "' not found for foreign key constraint", ""};
+                    }
+                    
+                    bool value_exists = false;
+                    for (const auto& row : ref_table->get_rows()) {
+                        const auto& row_values = row.get_values();
+                        for (size_t j = 0; j < ref_table->get_columns().size(); ++j) {
+                            if (ref_table->get_columns()[j].get_name() == fk.referenced_column) {
+                                if (j < row_values.size() && db::value_equals(row_values[j], value)) {
+                                    value_exists = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (value_exists) break;
+                    }
+                    
+                    if (!value_exists) {
+                        return {false, "Foreign key constraint violation: value '" + db::value_to_string(value) + 
+                                       "' does not exist in referenced table '" + fk.referenced_table + 
+                                       "' column '" + fk.referenced_column + "'", ""};
+                    }
                 }
             }
 

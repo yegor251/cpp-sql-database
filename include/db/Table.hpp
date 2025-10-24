@@ -9,6 +9,22 @@ using json = nlohmann::json;
 
 namespace db {
 
+struct ForeignKey {
+    std::string column_name;
+    std::string referenced_table;
+    std::string referenced_column;
+    
+    ForeignKey() = default;
+    ForeignKey(std::string col, std::string ref_table, std::string ref_col)
+        : column_name(std::move(col)), referenced_table(std::move(ref_table)), referenced_column(std::move(ref_col)) {}
+    
+    friend void to_json(json& j, const ForeignKey& fk);
+    friend void from_json(const json& j, ForeignKey& fk);
+};
+
+void to_json(json& j, const ForeignKey& fk);
+void from_json(const json& j, ForeignKey& fk);
+
 class Column {
 public:
     Column() = default;
@@ -17,6 +33,10 @@ public:
 
     const std::string& get_name() const noexcept { return name_; }
     const std::string& get_type() const noexcept { return type_; }
+    const std::vector<ForeignKey>& get_foreign_keys() const noexcept { return foreign_keys_; }
+    std::vector<ForeignKey>& get_foreign_keys() noexcept { return foreign_keys_; }
+
+    void add_foreign_key(const ForeignKey& fk) { foreign_keys_.push_back(fk); }
 
     friend void to_json(json& j, const Column& c);
     friend void from_json(const json& j, Column& c);
@@ -24,6 +44,7 @@ public:
 private:
     std::string name_;
     std::string type_;
+    std::vector<ForeignKey> foreign_keys_;
 };
 
 void to_json(json& j, const Column& c);
@@ -32,7 +53,7 @@ void from_json(const json& j, Column& c);
 class Table {
 public:
     Table() = default;
-    Table(std::string name, const std::vector<std::string>& column_names, const std::vector<std::string>& column_types);
+    Table(std::string name, const std::vector<std::string>& column_names, const std::vector<std::string>& column_types, const std::vector<ForeignKey>& foreign_keys = {});
 
     void insert(const Row& row);
 

@@ -27,12 +27,22 @@ struct DropDatabase {
     std::vector<std::string> names;
 };
 
+struct ForeignKeyConstraint {
+    std::string column_name;
+    std::string referenced_table;
+    std::string referenced_column;
+    
+    ForeignKeyConstraint() = default;
+    ForeignKeyConstraint(std::string col, std::string ref_table, std::string ref_col)
+        : column_name(std::move(col)), referenced_table(std::move(ref_table)), referenced_column(std::move(ref_col)) {}
+};
+
 struct CreateTable {
     std::string table_name;
     std::vector<std::string> columns;
     std::vector<std::string> types;
     std::vector<std::string> primary_keys;
-    std::vector<std::string> foreign_keys;
+    std::vector<ForeignKeyConstraint> foreign_keys;
     std::vector<std::string> constraints;
 };
 

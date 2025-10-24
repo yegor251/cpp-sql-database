@@ -3,6 +3,7 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <iostream>
 
 namespace sql {
 namespace parsers {
@@ -27,33 +28,171 @@ ParseResult parse_create_table(std::istringstream& iss) {
     iss >> c;
     if (c != '(') return {CommandType::CREATE_TABLE, {}, false, "Expected '(' after table name"};
     
-    std::vector<std::string> columns, types;
-    std::string col_name, col_type;
+    std::string table_def;
+    int paren_depth = 1;
+    while (iss.get(c) && paren_depth > 0) {
+        if (c == '(') {
+            paren_depth++;
+            table_def += c;
+        } else if (c == ')') {
+            paren_depth--;
+            if (paren_depth > 0) {
+                table_def += c;
+            }
+        } else {
+            table_def += c;
+        }
+    }
     
-    while (iss >> col_name) {
-        while (!col_name.empty() && (col_name.back() == ',' || col_name.back() == ';' || col_name.back() == ')')) {
-            col_name.pop_back();
+    if (!table_def.empty() && table_def.back() == ';') {
+        table_def.pop_back();
+    }
+    
+    table_def.erase(table_def.find_last_not_of(" \t") + 1);
+    
+    std::vector<std::string> columns, types;
+    std::vector<ForeignKeyConstraint> foreign_keys;
+    
+    std::vector<std::string> column_definitions;
+    std::string current_def;
+    bool in_parens = false;
+    
+    for (char ch : table_def) {
+        if (ch == '(') {
+            in_parens = true;
+            current_def += ch;
+        } else if (ch == ')') {
+            in_parens = false;
+            current_def += ch;
+        } else if (ch == ',' && !in_parens) {
+            if (!current_def.empty()) {
+                column_definitions.push_back(current_def);
+                current_def.clear();
+            }
+        } else {
+            current_def += ch;
+        }
+    }
+    
+    if (!current_def.empty()) {
+        column_definitions.push_back(current_def);
+    }
+    
+    std::cout << "DEBUG: Processing " << column_definitions.size() << " column definitions" << std::endl;
+    for (size_t def_idx = 0; def_idx < column_definitions.size(); ++def_idx) {
+        const auto& def = column_definitions[def_idx];
+        std::cout << "DEBUG: Processing definition " << def_idx << ": '" << def << "'" << std::endl;
+        
+        std::string trimmed_def = def;
+        trimmed_def.erase(0, trimmed_def.find_first_not_of(" \t"));
+        trimmed_def.erase(trimmed_def.find_last_not_of(" \t") + 1);
+        
+        if (trimmed_def.empty()) {
+            std::cout << "DEBUG: Empty definition, skipping" << std::endl;
+            continue;
         }
         
-        iss >> col_type;
-        while (!col_type.empty() && (col_type.back() == ',' || col_type.back() == ';' || col_type.back() == ')')) {
-            col_type.pop_back();
+        std::cout << "DEBUG: Trimmed definition: '" << trimmed_def << "'" << std::endl;
+        
+        std::istringstream def_stream(trimmed_def);
+        std::vector<std::string> tokens;
+        std::string token;
+        
+        while (def_stream >> token) {
+            tokens.push_back(token);
         }
         
-        std::string upper_type = to_upper(col_type);
-        if (upper_type != "INT" && upper_type != "FLOAT" && upper_type != "STR" && upper_type != "BOOL") {
-            return {CommandType::CREATE_TABLE, {}, false, "Invalid type: " + col_type + ". Supported types: INT, FLOAT, STR, BOOL"};
+        std::cout << "DEBUG: Tokens: ";
+        for (size_t i = 0; i < tokens.size(); ++i) {
+            std::cout << "[" << i << "]='" << tokens[i] << "' ";
+        }
+        std::cout << std::endl;
+        
+        if (tokens.empty()) {
+            std::cout << "DEBUG: No tokens, skipping" << std::endl;
+            continue;
+        }
+        
+        bool has_fk = false;
+        size_t fk_index = 0;
+        for (size_t i = 0; i < tokens.size(); ++i) {
+            if (to_upper(tokens[i]) == "FK") {
+                has_fk = true;
+                fk_index = i;
+                break;
+            }
+        }
+        
+        if (has_fk) {
+            std::cout << "DEBUG: Processing FK constraint" << std::endl;
+            std::cout << "DEBUG: FK found at index " << fk_index << std::endl;
+            std::cout << "DEBUG: Total tokens: " << tokens.size() << std::endl;
+            
+            std::string col_name, col_type;
+            if (fk_index >= 2) {
+                col_name = tokens[0];
+                col_type = to_upper(tokens[1]);
+                
+                std::cout << "DEBUG: Column name: " << col_name << ", type: " << col_type << std::endl;
+                
+                if (col_type != "INT" && col_type != "FLOAT" && col_type != "STR" && col_type != "BOOL") {
+                    return {CommandType::CREATE_TABLE, {}, false, "Invalid type: " + tokens[1] + ". Supported types: INT, FLOAT, STR, BOOL"};
+                }
+                
+                columns.push_back(col_name);
+                types.push_back(col_type);
+            }
+            
+            std::cout << "DEBUG: Checking FK syntax requirements" << std::endl;
+            std::cout << "DEBUG: tokens.size() = " << tokens.size() << ", fk_index = " << fk_index << ", need = " << (fk_index + 2) << std::endl;
+            
+            if (tokens.size() < fk_index + 2) {
+                std::cout << "DEBUG: Not enough tokens for FK syntax" << std::endl;
+                return {CommandType::CREATE_TABLE, {}, false, "Invalid FK syntax - not enough tokens"};
+            }
+            
+            std::cout << "DEBUG: FK tokens: ";
+            for (size_t i = fk_index; i < tokens.size() && i < fk_index + 2; ++i) {
+                std::cout << "'" << tokens[i] << "' ";
+            }
+            std::cout << std::endl;
+            
+            std::cout << "DEBUG: Checking token " << (fk_index + 1) << ": '" << tokens[fk_index + 1] << "' (should be table(column))" << std::endl;
+            
+            std::string ref_part = tokens[fk_index + 1];
+            
+            std::string fk_column = col_name;
+            
+            std::cout << "DEBUG: FK column: " << fk_column << std::endl;
+            std::cout << "DEBUG: Reference part: " << ref_part << std::endl;
+            
+            size_t paren_pos = ref_part.find('(');
+            std::string ref_table = ref_part.substr(0, paren_pos);
+            std::string ref_column = ref_part.substr(paren_pos + 1);
+            ref_column.pop_back();
+            
+            std::cout << "DEBUG: Reference table: " << ref_table << ", column: " << ref_column << std::endl;
+            
+            foreign_keys.emplace_back(fk_column, ref_table, ref_column);
+            continue;
+        }
+        
+        if (tokens.size() != 2) {
+            return {CommandType::CREATE_TABLE, {}, false, "Invalid column definition: " + trimmed_def};
+        }
+        
+        std::string col_name = tokens[0];
+        std::string col_type = to_upper(tokens[1]);
+        
+        if (col_type != "INT" && col_type != "FLOAT" && col_type != "STR" && col_type != "BOOL") {
+            return {CommandType::CREATE_TABLE, {}, false, "Invalid type: " + tokens[1] + ". Supported types: INT, FLOAT, STR, BOOL"};
         }
         
         columns.push_back(col_name);
-        types.push_back(upper_type);
-        
-        iss >> c;
-        if (c == ')' || c == ';') break;
-        iss.unget();
+        types.push_back(col_type);
     }
     
-    return {CommandType::CREATE_TABLE, CreateTable{tablename, columns, types}, true, ""};
+    return {CommandType::CREATE_TABLE, CreateTable{tablename, columns, types, {}, foreign_keys, {}}, true, ""};
 }
 
 }

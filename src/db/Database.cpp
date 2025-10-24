@@ -4,8 +4,8 @@ namespace db {
 
 Database::Database(std::string name) : name_(std::move(name)) {}
 
-void Database::create_table(std::string_view table_name, const std::vector<std::string>& columns, const std::vector<std::string>& types) {
-    tables_.emplace(std::string(table_name), Table(std::string(table_name), columns, types));
+void Database::create_table(std::string_view table_name, const std::vector<std::string>& columns, const std::vector<std::string>& types, const std::vector<ForeignKey>& foreign_keys) {
+    tables_.emplace(std::string(table_name), Table(std::string(table_name), columns, types, foreign_keys));
 }
 
 void Database::drop_table(std::string_view table_name) {
