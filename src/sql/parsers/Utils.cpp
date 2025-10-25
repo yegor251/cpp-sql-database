@@ -32,6 +32,10 @@ db::Value parse_value(const std::string& val) {
         return db::Value(upper_val == "TRUE");
     }
     
+    if (upper_val == "NULL") {
+        return db::Value(db::NullValue{});
+    }
+    
     return db::Value(clean_val);
 }
 
@@ -44,6 +48,8 @@ std::string value_to_string(const db::Value& value) {
         return std::get<bool>(value) ? "true" : "false";
     } else if (std::holds_alternative<std::string>(value)) {
         return std::get<std::string>(value);
+    } else if (std::holds_alternative<db::NullValue>(value)) {
+        return "NULL";
     }
     return "unknown";
 }

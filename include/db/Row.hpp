@@ -8,7 +8,11 @@ using json = nlohmann::json;
 
 namespace db {
 
-using Value = std::variant<int, float, std::string, bool>;
+struct NullValue {
+    bool operator==(const NullValue&) const { return true; }
+    bool operator<(const NullValue&) const { return false; }
+};
+using Value = std::variant<int, float, std::string, bool, NullValue>;
 
 class Row {
 public:

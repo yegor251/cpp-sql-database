@@ -13,6 +13,9 @@ std::string Executor::current_db = "";
 namespace {
 
 bool validate_type(const db::Value& value, const std::string& expected_type) {
+    // NULL is always valid for any type
+    if (std::holds_alternative<db::NullValue>(value)) return true;
+    
     if (expected_type == "INT") return std::holds_alternative<int>(value);
     if (expected_type == "FLOAT") return std::holds_alternative<float>(value);
     if (expected_type == "BOOL") return std::holds_alternative<bool>(value);
@@ -134,6 +137,11 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
             for (size_t i = 0; i < target_columns.size(); ++i) {
                 const auto& column = *target_columns[i];
                 const auto& value = cmd.values[i];
+                
+                // Skip foreign key validation for NULL values
+                if (std::holds_alternative<db::NullValue>(value)) {
+                    continue;
+                }
                 
                 for (const auto& fk : column.get_foreign_keys()) {
                     const auto* ref_table = db->get_table(fk.referenced_table);
