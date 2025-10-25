@@ -42,15 +42,31 @@ ParseResult parse_update(std::istringstream& iss) {
     std::string set_part;
     if (where_pos != std::string::npos) {
         set_part = line.substr(0, where_pos);
-        std::string where_part = line.substr(where_pos + 7); // Skip " WHERE "
+        std::string where_part = line.substr(where_pos + 7);
         
         where_part.erase(0, where_part.find_first_not_of(" \t"));
         where_part.erase(where_part.find_last_not_of(" \t") + 1);
         
         std::istringstream where_stream(where_part);
-        std::string condition;
-        while (where_stream >> condition) {
-            where_clauses.push_back(condition);
+        std::string token;
+        std::vector<std::string> tokens;
+        
+        while (where_stream >> token) {
+            tokens.push_back(token);
+        }
+        
+        for (size_t i = 0; i < tokens.size(); i += 3) {
+            if (i + 2 < tokens.size() && tokens[i + 1] == "=") {
+                where_clauses.push_back(tokens[i] + "=" + tokens[i + 2]);
+            }
+        }
+        
+        if (tokens.size() == 1) {
+            std::string condition = tokens[0];
+            size_t equals_pos = condition.find('=');
+            if (equals_pos != std::string::npos) {
+                where_clauses.push_back(condition);
+            }
         }
     } else {
         set_part = line;

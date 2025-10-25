@@ -13,7 +13,6 @@ std::string Executor::current_db = "";
 namespace {
 
 bool validate_type(const db::Value& value, const std::string& expected_type) {
-    // NULL is always valid for any type
     if (std::holds_alternative<db::NullValue>(value)) return true;
     
     if (expected_type == "INT") return std::holds_alternative<int>(value);
@@ -138,7 +137,6 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                 const auto& column = *target_columns[i];
                 const auto& value = cmd.values[i];
                 
-                // Skip foreign key validation for NULL values
                 if (std::holds_alternative<db::NullValue>(value)) {
                     continue;
                 }
@@ -274,7 +272,68 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                                    "': expected " + expected_type + ", got value '" + db::value_to_string(value) + "'", ""};
                 }
                 
+                const auto& column = columns[column_index];
+                for (const auto& fk : column.get_foreign_keys()) {
+                    if (std::holds_alternative<db::NullValue>(value)) {
+                        continue;
+                    }
+                    
+                    const auto* ref_table = db->get_table(fk.referenced_table);
+                    if (!ref_table) {
+                        return {false, "Referenced table '" + fk.referenced_table + "' not found for foreign key constraint", ""};
+                    }
+                    
+                    bool value_exists = false;
+                    for (const auto& row : ref_table->get_rows()) {
+                        const auto& row_values = row.get_values();
+                        for (size_t j = 0; j < ref_table->get_columns().size(); ++j) {
+                            if (ref_table->get_columns()[j].get_name() == fk.referenced_column) {
+                                if (j < row_values.size() && db::value_equals(row_values[j], value)) {
+                                    value_exists = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (value_exists) break;
+                    }
+                    
+                    if (!value_exists) {
+                        return {false, "Foreign key constraint violation: value '" + db::value_to_string(value) + 
+                                       "' does not exist in referenced table '" + fk.referenced_table + 
+                                       "' column '" + fk.referenced_column + "'", ""};
+                    }
+                }
+                
                 updates.push_back({column_name, value});
+            }
+            
+            for (const auto& update : updates) {
+                const std::string& column_name = update.first;
+                const db::Value& new_value = update.second;
+                
+                const auto& all_tables = db->get_tables();
+                for (const auto& [table_name, other_table] : all_tables) {
+                    if (table_name == cmd.table_name) continue;
+                    
+                    for (const auto& other_column : other_table.get_columns()) {
+                        for (const auto& fk : other_column.get_foreign_keys()) {
+                            if (fk.referenced_table == cmd.table_name && fk.referenced_column == column_name) {
+                                for (const auto& other_row : other_table.get_rows()) {
+                                    const auto& other_row_values = other_row.get_values();
+                                    for (size_t j = 0; j < other_table.get_columns().size(); ++j) {
+                                        if (other_table.get_columns()[j].get_name() == fk.column_name) {
+                                            if (j < other_row_values.size()) {
+                                                return {false, "Cannot update column '" + column_name + 
+                                                               "' because it is referenced by table '" + table_name + 
+                                                               "' column '" + fk.column_name + "'", ""};
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             
             int updated_count = 0;
