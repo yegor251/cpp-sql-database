@@ -36,4 +36,4 @@ void from_json(const json& j, Row& r) {
     }
 }
 
-} // namespace db
+}

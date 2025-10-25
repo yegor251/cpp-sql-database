@@ -6,5 +6,5 @@ namespace parsers {
 
 ParseResult parse_delete(std::istringstream& iss);
 
-} // namespace parsers
-} // namespace sql
+}
+}

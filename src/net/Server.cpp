@@ -63,7 +63,7 @@ void session(tcp::socket sock) {
     }
 }
 
-} // namespace
+}
 
 void run_server(short port) {
     // Загрузка БД

@@ -61,5 +61,5 @@ ParseResult parse_insert(std::istringstream& iss) {
     return {CommandType::INSERT, Insert{tablename, columns, values}, true, ""};
 }
 
-} // namespace parsers
-} // namespace sql 
+}
+}

@@ -63,4 +63,4 @@ void from_json(const json& j, Table& t) {
     j.at("rows").get_to(t.rows_);
 }
 
-} // namespace db
+}

@@ -54,5 +54,5 @@ std::string value_to_string(const db::Value& value) {
     return "unknown";
 }
 
-} // namespace parsers
-} // namespace sql 
+}
+}

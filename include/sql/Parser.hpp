@@ -9,4 +9,4 @@ public:
     static ParseResult parse(const std::string& query);
 };
 
-} // namespace sql
+}

@@ -16,4 +16,4 @@ public:
     static std::string current_db;
 };
 
-} // namespace sql
+}

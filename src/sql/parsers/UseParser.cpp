@@ -15,5 +15,5 @@ ParseResult parse_use(std::istringstream& iss) {
     return {CommandType::USE, {}, false, "No database name"};
 }
 
-} // namespace parsers
-} // namespace sql 
+}
+}

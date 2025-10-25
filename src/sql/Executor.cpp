@@ -307,8 +307,6 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                 updates.push_back({column_name, value});
             }
             
-            // FK reference check will be done for each row during update
-            
             int updated_count = 0;
             for (auto& row : rows) {
                 bool should_update = true;
@@ -343,13 +341,11 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                 }
                 
                 if (should_update) {
-                    // Check if any values being updated are referenced by other tables
                     const auto& current_row_values = row.get_values();
                     for (const auto& update : updates) {
                         const std::string& column_name = update.first;
                         const db::Value& new_value = update.second;
                         
-                        // Find the current value in this row
                         int column_index = -1;
                         for (size_t i = 0; i < columns.size(); ++i) {
                             if (columns[i].get_name() == column_name) {
@@ -361,15 +357,13 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                         if (column_index != -1 && column_index < current_row_values.size()) {
                             const db::Value& current_value = current_row_values[column_index];
                             
-                            // Check if this current value is referenced by other tables
                             const auto& all_tables = db->get_tables();
                             for (const auto& [other_table_name, other_table] : all_tables) {
-                                if (other_table_name == cmd.table_name) continue; // Skip self
+                                if (other_table_name == cmd.table_name) continue;
                                 
                                 for (const auto& other_column : other_table.get_columns()) {
                                     for (const auto& fk : other_column.get_foreign_keys()) {
                                         if (fk.referenced_table == cmd.table_name && fk.referenced_column == column_name) {
-                                            // Check if any row in this table references the current value
                                             for (const auto& other_row : other_table.get_rows()) {
                                                 const auto& other_row_values = other_row.get_values();
                                                 for (size_t j = 0; j < other_table.get_columns().size(); ++j) {
@@ -423,22 +417,18 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
             const auto& columns = table->get_columns();
             
             if (cmd.where.empty()) {
-                // Check if any rows are referenced before clearing all
                 const auto& all_tables = db->get_tables();
                 for (const auto& [other_table_name, other_table] : all_tables) {
-                    if (other_table_name == cmd.table_name) continue; // Skip self
+                    if (other_table_name == cmd.table_name) continue;
                     
                     for (const auto& other_column : other_table.get_columns()) {
                         for (const auto& fk : other_column.get_foreign_keys()) {
                             if (fk.referenced_table == cmd.table_name) {
-                                // This table references our table
-                                // Check if any row in this table references any row in our table
                                 for (const auto& other_row : other_table.get_rows()) {
                                     const auto& other_row_values = other_row.get_values();
                                     for (size_t j = 0; j < other_table.get_columns().size(); ++j) {
                                         if (other_table.get_columns()[j].get_name() == fk.column_name) {
                                             if (j < other_row_values.size()) {
-                                                // Find the referenced column in our table
                                                 int ref_column_index = -1;
                                                 for (size_t k = 0; k < columns.size(); ++k) {
                                                     if (columns[k].get_name() == fk.referenced_column) {
@@ -448,7 +438,6 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                                                 }
                                                 
                                                 if (ref_column_index != -1) {
-                                                    // Check if any row in our table has this value
                                                     for (const auto& our_row : rows) {
                                                         const auto& our_row_values = our_row.get_values();
                                                         if (ref_column_index < our_row_values.size() &&
@@ -506,27 +495,22 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                 }
                 
                 if (should_delete) {
-                    // Check if this row is referenced by other tables
                     const auto& row_values = it->get_values();
                     bool is_referenced = false;
                     std::string reference_info = "";
                     
-                    // Find all tables that might reference this table
                     const auto& all_tables = db->get_tables();
                     for (const auto& [other_table_name, other_table] : all_tables) {
-                        if (other_table_name == cmd.table_name) continue; // Skip self
+                        if (other_table_name == cmd.table_name) continue;
                         
                         for (const auto& other_column : other_table.get_columns()) {
                             for (const auto& fk : other_column.get_foreign_keys()) {
                                 if (fk.referenced_table == cmd.table_name) {
-                                    // This table references our table
-                                    // Check if any row in this table references the row we want to delete
                                     for (const auto& other_row : other_table.get_rows()) {
                                         const auto& other_row_values = other_row.get_values();
                                         for (size_t j = 0; j < other_table.get_columns().size(); ++j) {
                                             if (other_table.get_columns()[j].get_name() == fk.column_name) {
                                                 if (j < other_row_values.size()) {
-                                                    // Find the referenced column in our table
                                                     int ref_column_index = -1;
                                                     for (size_t k = 0; k < columns.size(); ++k) {
                                                         if (columns[k].get_name() == fk.referenced_column) {

@@ -74,4 +74,4 @@ private:
 void to_json(json& j, const Table& t);
 void from_json(const json& j, Table& t);
 
-} // namespace db
+}

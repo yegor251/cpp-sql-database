@@ -23,7 +23,6 @@ std::string value_to_string(const Value& v) {
 }
 
 bool value_equals(const Value& a, const Value& b) noexcept {
-    // NULL equals NULL, but NULL doesn't equal anything else
     if (std::holds_alternative<NullValue>(a) && std::holds_alternative<NullValue>(b)) {
         return true;
     }
@@ -41,7 +40,6 @@ bool value_equals(const Value& a, const Value& b) noexcept {
 }
 
 bool value_less(const Value& a, const Value& b) noexcept {
-    // NULL is not less than anything, and nothing is less than NULL
     if (std::holds_alternative<NullValue>(a) || std::holds_alternative<NullValue>(b)) {
         return false;
     }
@@ -55,4 +53,4 @@ bool value_less(const Value& a, const Value& b) noexcept {
     }, a, b);
 }
 
-} // namespace db 
+}

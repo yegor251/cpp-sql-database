@@ -32,4 +32,4 @@ private:
 void to_json(json& j, const StorageEngine& engine);
 void from_json(const json& j, StorageEngine& engine);
 
-} // namespace db
+}

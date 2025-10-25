@@ -33,4 +33,4 @@ private:
 void to_json(json& j, const Database& d);
 void from_json(const json& j, Database& d);
 
-} // namespace db
+}

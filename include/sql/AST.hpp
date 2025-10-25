@@ -96,4 +96,4 @@ struct ParseResult {
     std::string error;
 };
 
-} // namespace sql
+}

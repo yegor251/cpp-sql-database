@@ -3,5 +3,6 @@
 .cursor/
 .vscode/
 build/
+build_test/
 cmake-build-debug/
 .cursorrules

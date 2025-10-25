@@ -25,5 +25,5 @@ ParseResult parse_drop_table(std::istringstream& iss) {
     return {CommandType::DROP_TABLE, DropTable{tablenames}, true, ""};
 }
 
-} // namespace parsers
-} // namespace sql 
+}
+}

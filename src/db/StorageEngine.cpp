@@ -31,4 +31,4 @@ void from_json(const json& j, StorageEngine& engine) {
     j.at("databases").get_to(engine.databases_);
 }
 
-} // namespace db
+}

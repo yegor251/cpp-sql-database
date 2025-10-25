@@ -32,4 +32,4 @@ private:
 void to_json(json& j, const Row& r);
 void from_json(const json& j, Row& r);
 
-} // namespace db
+}
