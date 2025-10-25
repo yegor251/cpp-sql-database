@@ -402,6 +402,51 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
             const auto& columns = table->get_columns();
             
             if (cmd.where.empty()) {
+                // Check if any rows are referenced before clearing all
+                const auto& all_tables = db->get_tables();
+                for (const auto& [other_table_name, other_table] : all_tables) {
+                    if (other_table_name == cmd.table_name) continue; // Skip self
+                    
+                    for (const auto& other_column : other_table.get_columns()) {
+                        for (const auto& fk : other_column.get_foreign_keys()) {
+                            if (fk.referenced_table == cmd.table_name) {
+                                // This table references our table
+                                // Check if any row in this table references any row in our table
+                                for (const auto& other_row : other_table.get_rows()) {
+                                    const auto& other_row_values = other_row.get_values();
+                                    for (size_t j = 0; j < other_table.get_columns().size(); ++j) {
+                                        if (other_table.get_columns()[j].get_name() == fk.column_name) {
+                                            if (j < other_row_values.size()) {
+                                                // Find the referenced column in our table
+                                                int ref_column_index = -1;
+                                                for (size_t k = 0; k < columns.size(); ++k) {
+                                                    if (columns[k].get_name() == fk.referenced_column) {
+                                                        ref_column_index = k;
+                                                        break;
+                                                    }
+                                                }
+                                                
+                                                if (ref_column_index != -1) {
+                                                    // Check if any row in our table has this value
+                                                    for (const auto& our_row : rows) {
+                                                        const auto& our_row_values = our_row.get_values();
+                                                        if (ref_column_index < our_row_values.size() &&
+                                                            db::value_equals(other_row_values[j], our_row_values[ref_column_index])) {
+                                                            return {false, "Cannot delete all rows: table '" + cmd.table_name + 
+                                                                           "' is referenced by table '" + other_table_name + 
+                                                                           "' column '" + fk.column_name + "'", ""};
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 rows.clear();
                 return {true, "", "Deleted all rows from table " + cmd.table_name};
             }
@@ -440,6 +485,59 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                 }
                 
                 if (should_delete) {
+                    // Check if this row is referenced by other tables
+                    const auto& row_values = it->get_values();
+                    bool is_referenced = false;
+                    std::string reference_info = "";
+                    
+                    // Find all tables that might reference this table
+                    const auto& all_tables = db->get_tables();
+                    for (const auto& [other_table_name, other_table] : all_tables) {
+                        if (other_table_name == cmd.table_name) continue; // Skip self
+                        
+                        for (const auto& other_column : other_table.get_columns()) {
+                            for (const auto& fk : other_column.get_foreign_keys()) {
+                                if (fk.referenced_table == cmd.table_name) {
+                                    // This table references our table
+                                    // Check if any row in this table references the row we want to delete
+                                    for (const auto& other_row : other_table.get_rows()) {
+                                        const auto& other_row_values = other_row.get_values();
+                                        for (size_t j = 0; j < other_table.get_columns().size(); ++j) {
+                                            if (other_table.get_columns()[j].get_name() == fk.column_name) {
+                                                if (j < other_row_values.size()) {
+                                                    // Find the referenced column in our table
+                                                    int ref_column_index = -1;
+                                                    for (size_t k = 0; k < columns.size(); ++k) {
+                                                        if (columns[k].get_name() == fk.referenced_column) {
+                                                            ref_column_index = k;
+                                                            break;
+                                                        }
+                                                    }
+                                                    
+                                                    if (ref_column_index != -1 && ref_column_index < row_values.size() &&
+                                                        db::value_equals(other_row_values[j], row_values[ref_column_index])) {
+                                                        is_referenced = true;
+                                                        reference_info = "Referenced by table '" + other_table_name + 
+                                                                        "' column '" + fk.column_name + "'";
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (is_referenced) break;
+                                    }
+                                    if (is_referenced) break;
+                                }
+                            }
+                            if (is_referenced) break;
+                        }
+                        if (is_referenced) break;
+                    }
+                    
+                    if (is_referenced) {
+                        return {false, "Cannot delete row: " + reference_info, ""};
+                    }
+                    
                     it = rows.erase(it);
                     deleted_count++;
                 } else {
