@@ -307,34 +307,7 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                 updates.push_back({column_name, value});
             }
             
-            for (const auto& update : updates) {
-                const std::string& column_name = update.first;
-                const db::Value& new_value = update.second;
-                
-                const auto& all_tables = db->get_tables();
-                for (const auto& [table_name, other_table] : all_tables) {
-                    if (table_name == cmd.table_name) continue;
-                    
-                    for (const auto& other_column : other_table.get_columns()) {
-                        for (const auto& fk : other_column.get_foreign_keys()) {
-                            if (fk.referenced_table == cmd.table_name && fk.referenced_column == column_name) {
-                                for (const auto& other_row : other_table.get_rows()) {
-                                    const auto& other_row_values = other_row.get_values();
-                                    for (size_t j = 0; j < other_table.get_columns().size(); ++j) {
-                                        if (other_table.get_columns()[j].get_name() == fk.column_name) {
-                                            if (j < other_row_values.size()) {
-                                                return {false, "Cannot update column '" + column_name + 
-                                                               "' because it is referenced by table '" + table_name + 
-                                                               "' column '" + fk.column_name + "'", ""};
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // FK reference check will be done for each row during update
             
             int updated_count = 0;
             for (auto& row : rows) {
@@ -370,6 +343,54 @@ ExecResult Executor::execute(const ParseResult& pr, db::StorageEngine& engine) {
                 }
                 
                 if (should_update) {
+                    // Check if any values being updated are referenced by other tables
+                    const auto& current_row_values = row.get_values();
+                    for (const auto& update : updates) {
+                        const std::string& column_name = update.first;
+                        const db::Value& new_value = update.second;
+                        
+                        // Find the current value in this row
+                        int column_index = -1;
+                        for (size_t i = 0; i < columns.size(); ++i) {
+                            if (columns[i].get_name() == column_name) {
+                                column_index = i;
+                                break;
+                            }
+                        }
+                        
+                        if (column_index != -1 && column_index < current_row_values.size()) {
+                            const db::Value& current_value = current_row_values[column_index];
+                            
+                            // Check if this current value is referenced by other tables
+                            const auto& all_tables = db->get_tables();
+                            for (const auto& [other_table_name, other_table] : all_tables) {
+                                if (other_table_name == cmd.table_name) continue; // Skip self
+                                
+                                for (const auto& other_column : other_table.get_columns()) {
+                                    for (const auto& fk : other_column.get_foreign_keys()) {
+                                        if (fk.referenced_table == cmd.table_name && fk.referenced_column == column_name) {
+                                            // Check if any row in this table references the current value
+                                            for (const auto& other_row : other_table.get_rows()) {
+                                                const auto& other_row_values = other_row.get_values();
+                                                for (size_t j = 0; j < other_table.get_columns().size(); ++j) {
+                                                    if (other_table.get_columns()[j].get_name() == fk.column_name) {
+                                                        if (j < other_row_values.size() && 
+                                                            db::value_equals(other_row_values[j], current_value)) {
+                                                            return {false, "Cannot update row: value '" + db::value_to_string(current_value) + 
+                                                                           "' in column '" + column_name + 
+                                                                           "' is referenced by table '" + other_table_name + 
+                                                                           "' column '" + fk.column_name + "'", ""};
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
                     auto& row_values = row.get_values();
                     for (const auto& update : updates) {
                         int update_column_index = -1;
