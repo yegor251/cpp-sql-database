@@ -10,6 +10,9 @@ ParseResult parse_use(std::istringstream& iss) {
     std::string dbname;
     while (iss >> dbname) {
         if (dbname.empty()) return {CommandType::USE, {}, false, "No database name"};
+        if (!dbname.empty() && dbname.back() == ';') {
+            dbname.pop_back();
+        }
         return {CommandType::USE, Use{dbname}, true, ""};
     }
     return {CommandType::USE, {}, false, "No database name"};

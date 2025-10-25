@@ -12,6 +12,9 @@ ParseResult parse_create_database(std::istringstream& iss) {
     std::string dbname;
     iss >> dbname;
     if (dbname.empty()) return {CommandType::CREATE_DATABASE, {}, false, "No database name"};
+    if (!dbname.empty() && dbname.back() == ';') {
+        dbname.pop_back();
+    }
     return {CommandType::CREATE_DATABASE, CreateDatabase{dbname}, true, ""};
 }
 
