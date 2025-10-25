@@ -43,6 +43,13 @@ add_executable(sql_db_engine
     src/db/Table.cpp
     src/db/ValueUtils.cpp
     src/sql/Executor.cpp
+    src/sql/executors/CreateExecutor.cpp
+    src/sql/executors/DropExecutor.cpp
+    src/sql/executors/UseExecutor.cpp
+    src/sql/executors/InsertExecutor.cpp
+    src/sql/executors/SelectExecutor.cpp
+    src/sql/executors/UpdateExecutor.cpp
+    src/sql/executors/DeleteExecutor.cpp
 )
 
 target_include_directories(sql_db_engine PRIVATE 
